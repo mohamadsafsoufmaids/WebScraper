@@ -179,31 +179,33 @@ def scrape_ebay_deals():
         time.sleep(3)
         
         scroll_page(driver)
-        time.sleep(3)
+        time.sleep(5)
         
-        
-        products = driver.find_elements(By.CSS_SELECTOR, ".ebayui-dne-summary-card__wrapper")
-        
-        if len(products) == 0:
-            products = driver.find_elements(By.CSS_SELECTOR, "[class*='dne-itemtile']")
+        # Find all product cards
+        products = driver.find_elements(By.CSS_SELECTOR, "li.ebayui-dne-item-featured-card, div.ebayui-dne-item-featured-card, div.dne-itemtile")
         
         if len(products) == 0:
-            products = driver.find_elements(By.CSS_SELECTOR, "[class*='itemtile']")
+            products = driver.find_elements(By.CSS_SELECTOR, "li.s-item, div.s-item")
         
-        if len(products) == 0:
-            products = driver.find_elements(By.CSS_SELECTOR, "[data-testid*='item']")
+        print(f"Found {len(products)} products")
         
-        if len(products) == 0:
-            products = driver.find_elements(By.CSS_SELECTOR, "article, [role='listitem']")
-        
+        # Read existing data to check for duplicates and track price changes
+        existing_products = {}
         file_exists = False
         try:
-            with open("ebay_tech_deals.csv", "r"):
+            with open("ebay_tech_deals.csv", "r", encoding="utf-8") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    url = row.get("item_url", "")
+                    price = row.get("price", "")
+                    # Store the last known price for each URL
+                    existing_products[url] = price
                 file_exists = True
         except FileNotFoundError:
             pass
         
         products_scraped = 0
+        products_skipped = 0
         with open("ebay_tech_deals.csv", "a", newline="", encoding="utf-8") as csvfile:
             fieldnames = ["timestamp", "title", "price", "original_price", "shipping", "item_url"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -215,12 +217,19 @@ def scrape_ebay_deals():
                 try:
                     data = extract_product_data(driver, product)
                     if data["title"] != "N/A" or data["price"] != "N/A":
-                        writer.writerow(data)
-                        products_scraped += 1
+                        url = data["item_url"]
+                        current_price = data["price"]
+                        
+                        # Only add if: 1) new product, 2) price changed, 3) no URL (to be safe)
+                        if url not in existing_products or existing_products.get(url) != current_price or url == "N/A":
+                            writer.writerow(data)
+                            products_scraped += 1
+                        else:
+                            products_skipped += 1
                 except Exception as e:
                     continue
         
-        print(f"Scraped {products_scraped} products successfully out of {len(products)} found")
+        print(f"Scraped {products_scraped} products (new or price changed), skipped {products_skipped} duplicates, out of {len(products)} found")
     
     finally:
         driver.quit()
