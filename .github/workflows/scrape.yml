@@ -28,17 +28,17 @@ jobs:
     
     - name: Install Chrome
       run: |
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo gpg --dearmor -o /usr/share/keyrings/googlechrome-linux-keyring.gpg
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list > /dev/null
         sudo apt-get update
-        sudo apt-get install -y chromium-browser chromium-chromedriver
+        sudo apt-get install -y google-chrome-stable
+        google-chrome-stable --version
     
     - name: Run scraper
       run: |
-        export CHROMIUM_PATH=$(which chromium-browser)
-        export CHROMEDRIVER_PATH=$(which chromedriver)
         python scraper.py
       env:
-        CHROME_BIN: /usr/bin/chromium-browser
-        CHROMEDRIVER_PATH: /usr/bin/chromedriver
+        CHROME_BIN: /usr/bin/google-chrome-stable
     
     - name: Commit and push changes
       run: |
