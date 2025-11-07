@@ -30,7 +30,6 @@ def scroll_page(driver):
 def extract_product_data(driver, product_element):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Title - try multiple selectors
     title = "N/A"
     title_selectors = [
         "h3.ebayui-ellipsis-2",
@@ -49,7 +48,6 @@ def extract_product_data(driver, product_element):
         except NoSuchElementException:
             continue
     
-    # Price - try multiple selectors
     price = "N/A"
     price_selectors = [
         ".dne-itemtile-price",
@@ -68,7 +66,6 @@ def extract_product_data(driver, product_element):
         except NoSuchElementException:
             continue
     
-    # Original price - try multiple selectors
     original_price = "N/A"
     original_price_selectors = [
         ".dne-itemtile-original-price",
@@ -91,7 +88,6 @@ def extract_product_data(driver, product_element):
         except NoSuchElementException:
             continue
     
-    # Shipping - try multiple selectors
     shipping = "N/A"
     shipping_selectors = [
         ".dne-itemtile-delivery",
@@ -114,7 +110,6 @@ def extract_product_data(driver, product_element):
         except NoSuchElementException:
             continue
     
-    # URL
     item_url = "N/A"
     try:
         link_elem = product_element.find_element(By.CSS_SELECTOR, "a")
@@ -164,7 +159,7 @@ def scrape_ebay_deals():
                 options.binary_location = path
                 break
     
-    # Use system chromedriver if available, otherwise use ChromeDriverManager
+
     if chromedriver_path and os.path.exists(chromedriver_path):
         service = Service(chromedriver_path)
     elif os.path.exists('/usr/bin/chromedriver'):
@@ -181,7 +176,6 @@ def scrape_ebay_deals():
         scroll_page(driver)
         time.sleep(5)
         
-        # Find all product cards
         products = driver.find_elements(By.CSS_SELECTOR, "li.ebayui-dne-item-featured-card, div.ebayui-dne-item-featured-card, div.dne-itemtile")
         
         if len(products) == 0:
@@ -189,23 +183,14 @@ def scrape_ebay_deals():
         
         print(f"Found {len(products)} products")
         
-        # Read existing data to check for duplicates and track price changes
-        existing_products = {}
         file_exists = False
         try:
-            with open("ebay_tech_deals.csv", "r", encoding="utf-8") as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    url = row.get("item_url", "")
-                    price = row.get("price", "")
-                    # Store the last known price for each URL
-                    existing_products[url] = price
+            with open("ebay_tech_deals.csv", "r"):
                 file_exists = True
         except FileNotFoundError:
             pass
         
         products_scraped = 0
-        products_skipped = 0
         with open("ebay_tech_deals.csv", "a", newline="", encoding="utf-8") as csvfile:
             fieldnames = ["timestamp", "title", "price", "original_price", "shipping", "item_url"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -217,19 +202,12 @@ def scrape_ebay_deals():
                 try:
                     data = extract_product_data(driver, product)
                     if data["title"] != "N/A" or data["price"] != "N/A":
-                        url = data["item_url"]
-                        current_price = data["price"]
-                        
-                        # Only add if: 1) new product, 2) price changed, 3) no URL (to be safe)
-                        if url not in existing_products or existing_products.get(url) != current_price or url == "N/A":
-                            writer.writerow(data)
-                            products_scraped += 1
-                        else:
-                            products_skipped += 1
+                        writer.writerow(data)
+                        products_scraped += 1
                 except Exception as e:
                     continue
         
-        print(f"Scraped {products_scraped} products (new or price changed), skipped {products_skipped} duplicates, out of {len(products)} found")
+        print(f"Scraped {products_scraped} products successfully out of {len(products)} found")
     
     finally:
         driver.quit()
