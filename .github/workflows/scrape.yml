@@ -2,7 +2,7 @@ name: Scrape eBay Tech Deals
 
 on:
   schedule:
-    - cron: '* * * * *'  # Run every minute for testing
+    - cron: '0 */3 * * *'
   workflow_dispatch:
 
 jobs:
@@ -41,4 +41,3 @@ jobs:
         git push
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
