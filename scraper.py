@@ -65,6 +65,8 @@ def extract_product_data(driver, product_element):
     }
 
 def scrape_ebay_deals():
+    import os
+    
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
     options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
@@ -72,7 +74,19 @@ def scrape_ebay_deals():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     
-    service = Service(ChromeDriverManager().install())
+    # Use system chromium if available (GitHub Actions), otherwise use ChromeDriverManager
+    chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/chromium-browser')
+    chromedriver_path = os.environ.get('CHROMEDRIVER_PATH')
+    
+    if os.path.exists(chrome_bin):
+        options.binary_location = chrome_bin
+        if chromedriver_path and os.path.exists(chromedriver_path):
+            service = Service(chromedriver_path)
+        else:
+            service = Service()
+    else:
+        service = Service(ChromeDriverManager().install())
+    
     driver = webdriver.Chrome(service=service, options=options)
     
     try:

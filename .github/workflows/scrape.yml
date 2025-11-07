@@ -2,7 +2,7 @@ name: Scrape eBay Tech Deals
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '* * * * *'  # Run every minute for testing
   workflow_dispatch:
 
 jobs:
@@ -30,7 +30,12 @@ jobs:
     
     - name: Run scraper
       run: |
+        export CHROMIUM_PATH=$(which chromium-browser)
+        export CHROMEDRIVER_PATH=$(which chromedriver)
         python scraper.py
+      env:
+        CHROME_BIN: /usr/bin/chromium-browser
+        CHROMEDRIVER_PATH: /usr/bin/chromedriver
     
     - name: Commit and push changes
       run: |
