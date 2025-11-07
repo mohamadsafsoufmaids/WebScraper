@@ -9,51 +9,120 @@ from webdriver_manager.chrome import ChromeDriverManager
 
 def scroll_page(driver):
     last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
+    scroll_attempts = 0
+    max_scroll_attempts = 50
+    
+    while scroll_attempts < max_scroll_attempts:
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(2)
+        time.sleep(3)
         new_height = driver.execute_script("return document.body.scrollHeight")
         if new_height == last_height:
-            break
+            time.sleep(2)
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
         last_height = new_height
+        scroll_attempts += 1
+    
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(1)
 
 def extract_product_data(driver, product_element):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    try:
-        title = product_element.find_element(By.CSS_SELECTOR, "h3.dne-itemtile-title").text.strip()
-    except NoSuchElementException:
-        title = "N/A"
+    # Title - try multiple selectors
+    title = "N/A"
+    title_selectors = [
+        "h3.ebayui-ellipsis-2",
+        "h3.dne-itemtile-title",
+        "h3[class*='title']",
+        "h3",
+        ".dne-itemtile-title",
+        "[class*='title']"
+    ]
+    for selector in title_selectors:
+        try:
+            elem = product_element.find_element(By.CSS_SELECTOR, selector)
+            if elem.text.strip():
+                title = elem.text.strip()
+                break
+        except NoSuchElementException:
+            continue
     
-    try:
-        price_elem = product_element.find_element(By.CSS_SELECTOR, ".dne-itemtile-price")
-        price = price_elem.text.strip()
-    except NoSuchElementException:
-        price = "N/A"
+    # Price - try multiple selectors
+    price = "N/A"
+    price_selectors = [
+        ".dne-itemtile-price",
+        ".first",
+        "[class*='price']",
+        ".notranslate",
+        "span[class*='price']"
+    ]
+    for selector in price_selectors:
+        try:
+            elem = product_element.find_element(By.CSS_SELECTOR, selector)
+            text = elem.text.strip()
+            if text and ("$" in text or "US $" in text or "£" in text or "€" in text):
+                price = text
+                break
+        except NoSuchElementException:
+            continue
     
-    try:
-        original_price_elem = product_element.find_elements(By.CSS_SELECTOR, ".dne-itemtile-original-price")
-        if original_price_elem:
-            original_price = original_price_elem[0].text.strip()
-        else:
-            original_price = "N/A"
-    except NoSuchElementException:
-        original_price = "N/A"
+    # Original price - try multiple selectors
+    original_price = "N/A"
+    original_price_selectors = [
+        ".dne-itemtile-original-price",
+        ".strikethrough",
+        "[class*='original-price']",
+        "[class*='strikethrough']",
+        "span[class*='original']",
+        ".ebayui-ellipsis-2 .strikethrough"
+    ]
+    for selector in original_price_selectors:
+        try:
+            elems = product_element.find_elements(By.CSS_SELECTOR, selector)
+            for elem in elems:
+                text = elem.text.strip()
+                if text and ("$" in text or "US $" in text or "£" in text or "€" in text):
+                    original_price = text
+                    break
+            if original_price != "N/A":
+                break
+        except NoSuchElementException:
+            continue
     
-    try:
-        shipping_elem = product_element.find_elements(By.CSS_SELECTOR, ".dne-itemtile-delivery")
-        if shipping_elem:
-            shipping = shipping_elem[0].text.strip()
-        else:
-            shipping = "N/A"
-    except NoSuchElementException:
-        shipping = "N/A"
+    # Shipping - try multiple selectors
+    shipping = "N/A"
+    shipping_selectors = [
+        ".dne-itemtile-delivery",
+        ".u-flL.shipping",
+        "[class*='shipping']",
+        "[class*='delivery']",
+        ".shipping",
+        "span[class*='shipping']"
+    ]
+    for selector in shipping_selectors:
+        try:
+            elems = product_element.find_elements(By.CSS_SELECTOR, selector)
+            for elem in elems:
+                text = elem.text.strip()
+                if text and len(text) > 0:
+                    shipping = text
+                    break
+            if shipping != "N/A":
+                break
+        except NoSuchElementException:
+            continue
     
+    # URL
+    item_url = "N/A"
     try:
         link_elem = product_element.find_element(By.CSS_SELECTOR, "a")
-        item_url = link_elem.get_attribute("href")
+        href = link_elem.get_attribute("href")
+        if href and "ebay.com" in href:
+            item_url = href
     except NoSuchElementException:
-        item_url = "N/A"
+        pass
     
     return {
         "timestamp": timestamp,
@@ -69,24 +138,28 @@ def scrape_ebay_deals():
     
     options = webdriver.ChromeOptions()
     options.add_argument("--headless=new")
-    options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     
-    # Use system chromium if available (GitHub Actions), otherwise use ChromeDriverManager
-    chrome_bin = os.environ.get('CHROME_BIN', '/usr/bin/chromium-browser')
-    chromedriver_path = os.environ.get('CHROMEDRIVER_PATH')
+    chrome_bin = os.environ.get('CHROME_BIN')
+    chrome_paths = [
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome',
+        '/usr/bin/chromium',
+        '/usr/bin/chromium-browser',
+        '/snap/bin/chromium'
+    ]
     
-    if os.path.exists(chrome_bin):
+    if chrome_bin and os.path.exists(chrome_bin):
         options.binary_location = chrome_bin
-        if chromedriver_path and os.path.exists(chromedriver_path):
-            service = Service(chromedriver_path)
-        else:
-            service = Service()
     else:
-        service = Service(ChromeDriverManager().install())
+        for path in chrome_paths:
+            if os.path.exists(path):
+                options.binary_location = path
+                break
     
+    service = Service(ChromeDriverManager().install())
     driver = webdriver.Chrome(service=service, options=options)
     
     try:
@@ -94,9 +167,22 @@ def scrape_ebay_deals():
         time.sleep(3)
         
         scroll_page(driver)
-        time.sleep(2)
+        time.sleep(3)
+        
         
         products = driver.find_elements(By.CSS_SELECTOR, ".ebayui-dne-summary-card__wrapper")
+        
+        if len(products) == 0:
+            products = driver.find_elements(By.CSS_SELECTOR, "[class*='dne-itemtile']")
+        
+        if len(products) == 0:
+            products = driver.find_elements(By.CSS_SELECTOR, "[class*='itemtile']")
+        
+        if len(products) == 0:
+            products = driver.find_elements(By.CSS_SELECTOR, "[data-testid*='item']")
+        
+        if len(products) == 0:
+            products = driver.find_elements(By.CSS_SELECTOR, "article, [role='listitem']")
         
         file_exists = False
         try:
@@ -105,6 +191,7 @@ def scrape_ebay_deals():
         except FileNotFoundError:
             pass
         
+        products_scraped = 0
         with open("ebay_tech_deals.csv", "a", newline="", encoding="utf-8") as csvfile:
             fieldnames = ["timestamp", "title", "price", "original_price", "shipping", "item_url"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -115,11 +202,13 @@ def scrape_ebay_deals():
             for product in products:
                 try:
                     data = extract_product_data(driver, product)
-                    writer.writerow(data)
-                except Exception:
+                    if data["title"] != "N/A" or data["price"] != "N/A":
+                        writer.writerow(data)
+                        products_scraped += 1
+                except Exception as e:
                     continue
         
-        print(f"Scraped {len(products)} products successfully")
+        print(f"Scraped {products_scraped} products successfully out of {len(products)} found")
     
     finally:
         driver.quit()
