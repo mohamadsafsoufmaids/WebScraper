@@ -2,7 +2,7 @@ name: Scrape eBay Tech Deals
 
 on:
   schedule:
-    - cron: '0 */3 * * *'
+    - cron: '* * * * *'  # Run every minute for testing
   workflow_dispatch:
 
 jobs:
